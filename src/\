@@ -1,0 +1,69 @@
+import numpy as np
+import argparse
+import sys
+
+# input: traj_.dat file
+# output: movie_.xyz file to be viewed using vmd movie_.xyz -e color.sc
+# args: first_frame last_frame interval
+parser = argparse.ArgumentParser(description="Make movie from trajectory data.")
+parser.add_argument('-in', dest="paramfile", required=True, help=".in script")
+parser.add_argument('-i', dest="infile", required=True, help="Input trj file")
+parser.add_argument('-o', dest="outfile", required=True, help="Output xyz file")
+parser.add_argument('-ff', dest="first_frame", required=True, help="First frame")
+parser.add_argument('-lf', dest="last_frame", required=True, help="Last frame")
+parser.add_argument('-int', dest="interval", required=True, help="Interval between frames")
+args=parser.parse_args()
+
+# unpack metavars
+with open(args.infile,"r") as f:
+	s = f.read().split()
+	metavars={}
+	for i in range(len(s)):
+		if i%2==0:
+			metavars[s[i]]=s[i+1]
+print(metavars)
+
+framerows= 1+int(metavars['number_oil'])+int(metavars['number_tail'])+int(metavars['number_head'])#+int(metavars['number_vacuum'])#+int(metavars['number_water'])
+for i in range(int(args.first_frame),int(args.last_frame),int(args.interval)):
+	data = np.loadtxt(args.infile,skiprows=i*framerows+1,max_rows=framerows-1,dtype='U')
+	# process the data into vmd compatible format
+	water = data[:,3]=='w'
+	oil = data[:,3]=='o'
+	head = data[:,3]=='h' 
+	tail = data[:,3]=='t' 
+	vac = data[:,3]=='v'
+	coords = data[:,:3].astype(float)
+
+	frame = np.zeros((framerows-1,4),dtype=float)
+	p_count = 0
+
+	# frame[p_count:p_count+int(metavars['number_water']),1:] = np.copy(coords[water])
+	# frame[p_count:p_count+int(metavars['number_water']),0] = 1
+	# p_count += int(metavars['number_water'])
+
+	frame[p_count:p_count+int(metavars['number_oil']),1:] = np.copy(coords[oil])+0.5
+	frame[p_count:p_count+int(metavars['number_oil']),0] = 2
+	p_count += int(metavars['number_oil'])
+
+	# frame[p_count:p_count+int(metavars['number_vacuum']),1:] = np.copy(coords[vac])
+	# frame[p_count:p_count+int(metavars['number_vacuum']),0] = 3
+	# p_count += int(metavars['number_vacuum'])
+
+	frame[p_count:p_count+int(metavars['number_head']),1:] = np.copy(coords[head])
+	frame[p_count:p_count+int(metavars['number_head']),0] = 4
+	p_count += int(metavars['number_head'])
+
+	frame[p_count:p_count+int(metavars['number_tail']),1:] = np.copy(coords[tail])+0.5
+	frame[p_count:p_count+int(metavars['number_tail']),0] = 5
+	p_count += int(metavars['number_tail'])
+
+      
+	print("\rConverting MCSweep ",i,"/",args.last_frame,end="")
+
+	with open(args.outfile,"a") as f:
+		f.write("{}\n\n".format(p_count))
+
+	with open(args.outfile,"ab") as f:
+		np.savetxt(f, frame[:p_count,:], fmt='%d %f %f %f')
+
+print("\n")
